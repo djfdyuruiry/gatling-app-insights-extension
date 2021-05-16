@@ -1,0 +1,91 @@
+plugins {
+  id "maven-publish"
+  id "scala"
+
+  id "com.github.johnrengelman.shadow" version "7.0.0"
+}
+
+repositories {
+  mavenCentral()
+}
+
+group = "io.github.djfdyuruiry.gatlng.azure"
+version = "0.1.0"
+description = "gatling-app-insights-extension"
+
+publishing {
+  publications {
+    maven(MavenPublication) {
+      artifact shadowJar
+
+      pom {
+        name = "Azure AppInsights Gatling Extension"
+        description = "Plugin for the Gatling test framework that reports test request telemetry to Azure AppInsights"
+        url = "https://github.com/djfdyuruiry/gatling-app-insights-extension"
+
+        licenses {
+          license {
+            name = "MIT License"
+            url = "https://raw.githubusercontent.com/djfdyuruiry/gatling-app-insights-extension/master/LICENSE"
+          }
+        }
+
+        developers {
+          developer {
+            id = "djfdyuruiry"
+            name = "Matthew Snoddy"
+            email = "djfdyuruiry@noreply.github.com"
+          }
+        }
+      }
+
+      repositories {
+        maven {
+          name = "GitHubPackages"
+          url "https://maven.pkg.github.com/djfdyuruiry/gatling-app-insights-extension"
+
+          credentials {
+            username = "djfdyuruiry"
+            password = System.getenv("GITHUB_TOKEN")
+          }
+        }
+      }
+    }
+  }
+}
+
+dependencies {
+  compileOnly "io.gatling:gatling-core:${gatlingVersion}"
+  compileOnly "io.gatling:gatling-http:${gatlingVersion}"
+
+  implementation "org.scala-lang:scala-library:${scalaVersionFull}"
+  implementation "com.microsoft.azure:applicationinsights-core:2.6.3"
+
+  testImplementation "org.mockito:mockito-scala_${scalaVersion}:${mockitoVersion}"
+  testImplementation "org.mockito:mockito-scala-scalatest_${scalaVersion}:${mockitoVersion}"
+  testImplementation "org.scalatest:scalatest_${scalaVersion}:3.2.3"
+  testImplementation "org.scalatestplus:junit-4-13_${scalaVersion}:3.2.2.0"
+  testImplementation "io.gatling:gatling-core:${gatlingVersion}"
+  testImplementation "io.gatling:gatling-http:${gatlingVersion}"
+  testImplementation "junit:junit:4.13.1"
+
+  testRuntimeOnly "org.scala-lang.modules:scala-xml_${scalaVersion}:1.2.0"
+}
+
+shadowJar {
+  dependsOn test
+
+  dependencies {
+    exclude(dependency("org.scala-lang:.*"))
+  }
+
+  mergeServiceFiles {
+    exclude "META-INF/*.SF"
+    exclude "META-INF/*.DSA"
+    exclude "META-INF/*.RSA"
+  }
+}
+
+publish {
+  dependsOn shadowJar
+}
