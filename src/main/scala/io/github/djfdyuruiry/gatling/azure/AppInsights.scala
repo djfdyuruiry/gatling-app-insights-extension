@@ -8,8 +8,14 @@ import io.gatling.core.structure.ScenarioBuilder
 import io.gatling.http.request.builder.HttpRequestBuilder
 
 object AppInsights {
+  var recorderConfig: RecorderConfig = _
+
   private lazy val recorder: AppInsightsResponseRecorder = {
-    new AppInsightsResponseRecorder()
+    val recorderInstance = new AppInsightsResponseRecorder()
+
+    recorderInstance.config = recorderConfig
+
+    recorderInstance
   }
 
   implicit class RequestBuilderExtensions(builder: HttpRequestBuilder) {

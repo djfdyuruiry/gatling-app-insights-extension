@@ -12,12 +12,14 @@ import com.microsoft.applicationinsights.{TelemetryClient, TelemetryConfiguratio
 
 class AppInsightsResponseRecorder {
   var telemetryClientFactory: TelemetryConfiguration => TelemetryClient = c => new TelemetryClient(c)
-  var config: RecorderConfig = RecorderConfig()
+  var config: RecorderConfig = _
 
   lazy val telemetryClient: TelemetryClient = {
-    val config = TelemetryConfiguration.createDefault();
+    val telemetryConfig = TelemetryConfiguration.createDefault();
 
-    telemetryClientFactory.apply(config)
+    telemetryConfig.setInstrumentationKey(config.instrumentationKey)
+
+    telemetryClientFactory.apply(telemetryConfig)
   }
 
   private def getSessionValOrDefault(session: Session, key: String): String = {

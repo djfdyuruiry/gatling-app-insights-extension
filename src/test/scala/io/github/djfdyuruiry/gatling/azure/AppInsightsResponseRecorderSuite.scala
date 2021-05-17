@@ -2,10 +2,13 @@ package io.github.djfdyuruiry.gatling.azure
 
 import java.util
 import java.util.Date
+
 import org.mockito.captor.ArgCaptor
 import org.mockito.scalatest.MockitoSugar
+import org.mockito.verification.VerificationMode
 import org.scalatest.BeforeAndAfter
 import org.scalatest.funsuite.AnyFunSuite
+
 import io.gatling.commons.stats.OK
 import io.gatling.core.session.{Block, Session}
 import io.gatling.http.client.Request
@@ -16,11 +19,13 @@ import io.gatling.http.response.{Response, ResponseBody}
 import io.netty.channel.EventLoop
 import io.netty.handler.codec.http.cookie.Cookie
 import io.netty.handler.codec.http.{HttpHeaders, HttpMethod, HttpResponseStatus}
+
 import com.microsoft.applicationinsights.telemetry.{Duration, RequestTelemetry}
 import com.microsoft.applicationinsights.{TelemetryClient, TelemetryConfiguration}
-import org.mockito.verification.VerificationMode
 
 class AppInsightsResponseRecorderSuite extends AnyFunSuite with BeforeAndAfter with MockitoSugar {
+  private val testInstrumentationKey: String = "test-instrumentation-key"
+
   private var recorderConfig: RecorderConfig = _
   private var telemetryClient: TelemetryClient = _
 
@@ -80,10 +85,16 @@ class AppInsightsResponseRecorderSuite extends AnyFunSuite with BeforeAndAfter w
       isHttp2 = false
     )
 
-    recorderConfig = RecorderConfig()
+    recorderConfig = RecorderConfig(testInstrumentationKey)
     telemetryClient = mock[TelemetryClient]
 
     buildRecorder(recorderConfig, telemetryClient)
+  }
+
+  test("when telemetry client created then config contains correct instrumentation key") {
+    recorder.recordResponse(session, response)
+
+    assert(telemetryConfigUsed.getInstrumentationKey === testInstrumentationKey)
   }
 
   test("when recordResponse is called then telemetry client is called") {
@@ -113,6 +124,7 @@ class AppInsightsResponseRecorderSuite extends AnyFunSuite with BeforeAndAfter w
 
   test(s"when config.defaultValue is set and recordResponse is called then returned response has correct default values") {
     recorderConfig = RecorderConfig(
+      testInstrumentationKey,
       defaultValue = "special",
       sessionFieldMappings = Map(
         "TestField" -> "MissingField"
@@ -125,7 +137,10 @@ class AppInsightsResponseRecorderSuite extends AnyFunSuite with BeforeAndAfter w
   }
 
   test(s"when config.requestNameProvider is set and recordResponse is called then returned response has correct name") {
-    recorderConfig = RecorderConfig(requestNameProvider = (_, _) => "some dummy name")
+    recorderConfig = RecorderConfig(
+      testInstrumentationKey,
+      requestNameProvider = (_, _) => "some dummy name"
+    )
 
     buildRecorder()
 
@@ -134,6 +149,7 @@ class AppInsightsResponseRecorderSuite extends AnyFunSuite with BeforeAndAfter w
 
   test(s"when config.sessionFieldMappings is set and recordResponse is called then returned response has session fields") {
     recorderConfig = RecorderConfig(
+      testInstrumentationKey,
       sessionFieldMappings = Map(
         "MagicNumberOut" -> "MagicNumber",
         "CountryCodeOut" -> "CountryCode"
@@ -148,6 +164,7 @@ class AppInsightsResponseRecorderSuite extends AnyFunSuite with BeforeAndAfter w
 
   test(s"when config.customMappings is set and recordResponse is called then returned response has custom fields") {
     recorderConfig = RecorderConfig(
+      testInstrumentationKey,
       customMappings = Map(
         "FormattedScenario" -> ((s, _) => s"--> ${s.scenario} <--"),
         "LogCode" -> ((_, r) => s"responseCode=${r.status.code()}")
