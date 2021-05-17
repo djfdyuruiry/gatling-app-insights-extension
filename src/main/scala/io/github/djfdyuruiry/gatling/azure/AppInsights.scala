@@ -4,38 +4,79 @@ import scala.language.implicitConversions
 
 import io.gatling.core.Predef._
 import io.gatling.core.action.builder.ActionBuilder
-import io.gatling.core.structure.ScenarioBuilder
+import io.gatling.core.structure.{ChainBuilder, ScenarioBuilder}
 import io.gatling.http.request.builder.HttpRequestBuilder
 
 object AppInsights {
-  var recorderConfig: RecorderConfig = _
+  private var appInsightsEnabled = true
+  private var recorderInstance: AppInsightsResponseRecorder = _
 
-  private lazy val recorder: AppInsightsResponseRecorder = {
-    val recorderInstance = new AppInsightsResponseRecorder()
-
-    recorderInstance.config = recorderConfig
+  private def getRecorder: AppInsightsResponseRecorder = {
+    if (recorderInstance == null) {
+      throw new IllegalStateException("Please initialize app " +
+        "insights config by callingAppInsights.useAppInsightsConfig")
+    }
 
     recorderInstance
   }
 
+  def enableAppInsights(): Unit =
+    appInsightsEnabled = true
+
+  def disableAppInsights(): Unit =
+    appInsightsEnabled = false
+
+  def useAppInsightsConfig(recorderConfig: RecorderConfig): Unit = {
+    recorderInstance = new AppInsightsResponseRecorder()
+
+    recorderInstance.config = recorderConfig
+  }
+
   implicit class RequestBuilderExtensions(builder: HttpRequestBuilder) {
-    def recordToAppInsights: HttpRequestBuilder =
-      builder.transformResponse(recorder.recordResponse)
+    def recordToAppInsights: HttpRequestBuilder = {
+      if (!appInsightsEnabled) {
+        return builder
+      }
+
+      builder.transformResponse(getRecorder.recordResponse)
+    }
   }
 
   implicit class ScenarioExtensions(scenario: ScenarioBuilder) {
-    def withAppInsightsRecording(builder: ActionBuilder): ScenarioBuilder =
+    def withAppInsightsRecording(builder: ChainBuilder): ScenarioBuilder = {
+      if (!appInsightsEnabled) {
+        return scenario
+      }
+
       scenario.exec(builder)
         .exec(s => {
-          recorder.flushAppInsightRequests()
+          getRecorder.flushAppInsightRequests()
           s
         })
+    }
 
-    def flushAppInsightsRecordings: ScenarioBuilder =
+    def withAppInsightsRecording(builder: ActionBuilder): ScenarioBuilder = {
+      if (!appInsightsEnabled) {
+        return scenario
+      }
+
+      scenario.exec(builder)
+        .exec(s => {
+          getRecorder.flushAppInsightRequests()
+          s
+        })
+    }
+
+    def flushAppInsightsRecordings: ScenarioBuilder = {
+      if (!appInsightsEnabled) {
+        return scenario
+      }
+
       scenario
         .exec(s => {
-          recorder.flushAppInsightRequests()
+          getRecorder.flushAppInsightRequests()
           s
         })
+    }
   }
 }
