@@ -1,13 +1,11 @@
 package io.github.djfdyuruiry.gatling.azure
 
 import java.util
-
-import org.junit.runner.RunWith
+import java.util.Date
+import org.mockito.captor.ArgCaptor
 import org.mockito.scalatest.MockitoSugar
 import org.scalatest.BeforeAndAfter
 import org.scalatest.funsuite.AnyFunSuite
-import org.scalatestplus.junit.JUnitRunner
-
 import io.gatling.commons.stats.OK
 import io.gatling.core.session.{Block, Session}
 import io.gatling.http.client.Request
@@ -18,26 +16,31 @@ import io.gatling.http.response.{Response, ResponseBody}
 import io.netty.channel.EventLoop
 import io.netty.handler.codec.http.cookie.Cookie
 import io.netty.handler.codec.http.{HttpHeaders, HttpMethod, HttpResponseStatus}
-
-import com.microsoft.applicationinsights.telemetry.RequestTelemetry
+import com.microsoft.applicationinsights.telemetry.{Duration, RequestTelemetry}
 import com.microsoft.applicationinsights.{TelemetryClient, TelemetryConfiguration}
+import org.mockito.verification.VerificationMode
 
-@RunWith(classOf[JUnitRunner])
 class AppInsightsResponseRecorderSuite extends AnyFunSuite with BeforeAndAfter with MockitoSugar {
-  private var session: Session = _
-  private var request: Request = _
-  private var response: Response = _
+  private var recorderConfig: RecorderConfig = _
   private var telemetryClient: TelemetryClient = _
 
   private var recorder: AppInsightsResponseRecorder = _
 
   private var telemetryConfigUsed: TelemetryConfiguration = _
+  private var session: Session = _
+  private var request: Request = _
+  private var response: Response = _
 
   before {
+    val sessionFields = Map[String, Any](
+      "MagicNumber" -> 42,
+      "CountryCode" -> "en-gb"
+    )
+
     session = new Session(
-      "scenario",
+      "scenario name",
       12345,
-      Map[String, Any](),
+      sessionFields,
       OK,
       List[Block](),
       _ => {
@@ -48,7 +51,7 @@ class AppInsightsResponseRecorderSuite extends AnyFunSuite with BeforeAndAfter w
 
     request = new Request(
       HttpMethod.GET,
-      Uri.create("https://duckduckgo.com"),
+      Uri.create("https://duckduckgo.com?someQueryKey=val"),
       mock[HttpHeaders],
       new util.ArrayList[Cookie](),
       mock[RequestBody],
@@ -77,26 +80,121 @@ class AppInsightsResponseRecorderSuite extends AnyFunSuite with BeforeAndAfter w
       isHttp2 = false
     )
 
+    recorderConfig = RecorderConfig()
     telemetryClient = mock[TelemetryClient]
 
-    recorder = new AppInsightsResponseRecorder()
-
-    recorder.telemetryClientFactory = c => {
-      telemetryConfigUsed = c
-
-      telemetryClient
-    }
+    buildRecorder(recorderConfig, telemetryClient)
   }
 
-  test("when recordResponse called then telemetry client is called") {
+  test("when recordResponse is called then telemetry client is called") {
     recorder.recordResponse(session, response)
 
     verify(telemetryClient, times(1)).trackRequest(any[RequestTelemetry])
+  }
+
+  for ((fieldName, (fieldExtractor, expectedValue)) <- Map[String, (RequestTelemetry => Any, Any)](
+    "name" -> (_.getName, "GET https://duckduckgo.com"),
+    "url" -> (_.getUrl.toString, "https://duckduckgo.com"),
+    "method" -> (_.getHttpMethod, "GET"),
+    "responseCode" -> (_.getResponseCode, "200"),
+    "timestamp" -> (_.getTimestamp, new Date(0)),
+    "duration" -> (_.getDuration, new Duration(100)),
+    "GatlingScenario" -> (_.getProperties.get("GatlingScenario"), "scenario name"),
+    "HttpUrl" -> (_.getProperties.get("HttpUrl"), "https://duckduckgo.com"),
+    "HttpQueryString" -> (_.getProperties.get("HttpQueryString"), "someQueryKey=val"),
+    "HttpMethod" -> (_.getProperties.get("HttpMethod"), "GET"),
+    "StartTime" -> (_.getProperties.get("StartTime"), "0"),
+    "EndTime" -> (_.getProperties.get("EndTime"), "100")
+  )) {
+    test(s"when recordResponse is called then returned response has correct ${fieldName} value") {
+      runRecordTest(fieldExtractor, expectedValue)
+    }
+  }
+
+  test(s"when config.defaultValue is set and recordResponse is called then returned response has correct default values") {
+    recorderConfig = RecorderConfig(
+      defaultValue = "special",
+      sessionFieldMappings = Map(
+        "TestField" -> "MissingField"
+      )
+    )
+
+    buildRecorder()
+
+    runRecordTest(_.getProperties.get("TestField"), "special")
+  }
+
+  test(s"when config.requestNameProvider is set and recordResponse is called then returned response has correct name") {
+    recorderConfig = RecorderConfig(requestNameProvider = (_, _) => "some dummy name")
+
+    buildRecorder()
+
+    runRecordTest(_.getName, "some dummy name")
+  }
+
+  test(s"when config.sessionFieldMappings is set and recordResponse is called then returned response has session fields") {
+    recorderConfig = RecorderConfig(
+      sessionFieldMappings = Map(
+        "MagicNumberOut" -> "MagicNumber",
+        "CountryCodeOut" -> "CountryCode"
+      )
+    )
+
+    buildRecorder()
+
+    runRecordTest(_.getProperties.get("MagicNumberOut"), "42", times(1))
+    runRecordTest(_.getProperties.get("CountryCodeOut"), "en-gb", times(2))
+  }
+
+  test(s"when config.customMappings is set and recordResponse is called then returned response has custom fields") {
+    recorderConfig = RecorderConfig(
+      customMappings = Map(
+        "FormattedScenario" -> ((s, _) => s"--> ${s.scenario} <--"),
+        "LogCode" -> ((_, r) => s"responseCode=${r.status.code()}")
+      )
+    )
+
+    buildRecorder()
+
+    runRecordTest(_.getProperties.get("FormattedScenario"), "--> scenario name <--", times(1))
+    runRecordTest(_.getProperties.get("LogCode"), "responseCode=200", times(2))
   }
 
   test("when recordResponse called then response is returned") {
     assert(
       recorder.recordResponse(session, response) === response
     )
+  }
+
+  test("when flushAppInsightRequests is called then telemetry client is called") {
+    recorder.flushAppInsightRequests()
+
+    verify(telemetryClient, times(1)).flush()
+  }
+
+  private def buildRecorder(recorderConfigToUse: RecorderConfig = recorderConfig,
+                            telemetryClientToUse: TelemetryClient = telemetryClient): Unit = {
+    recorder = new AppInsightsResponseRecorder()
+
+    recorder.config = recorderConfigToUse
+    recorder.telemetryClientFactory = c => {
+      telemetryConfigUsed = c
+
+      telemetryClientToUse
+    }
+  }
+
+  private def runRecordTest(fieldExtractor: RequestTelemetry => Any,
+                            expectedValue: Any,
+                            timesCalled: VerificationMode = times(1)): Unit = {
+    recorder.recordResponse(session, response)
+
+    val requestCaptor = ArgCaptor[RequestTelemetry]
+
+    verify(telemetryClient, timesCalled).trackRequest(requestCaptor.capture)
+
+    val requestTelemetryFieldValue = fieldExtractor.apply(requestCaptor.value)
+
+    assert(requestTelemetryFieldValue === expectedValue)
   }
 }

@@ -64,12 +64,22 @@ dependencies {
   testImplementation "org.mockito:mockito-scala_${scalaVersion}:${mockitoVersion}"
   testImplementation "org.mockito:mockito-scala-scalatest_${scalaVersion}:${mockitoVersion}"
   testImplementation "org.scalatest:scalatest_${scalaVersion}:3.2.3"
-  testImplementation "org.scalatestplus:junit-4-13_${scalaVersion}:3.2.2.0"
   testImplementation "io.gatling:gatling-core:${gatlingVersion}"
   testImplementation "io.gatling:gatling-http:${gatlingVersion}"
-  testImplementation "junit:junit:4.13.1"
 
-  testRuntimeOnly "org.scala-lang.modules:scala-xml_${scalaVersion}:1.2.0"
+  testRuntimeOnly "org.junit.platform:junit-platform-engine:1.6.0"
+  testRuntimeOnly "org.junit.platform:junit-platform-launcher:1.6.0"
+  testRuntimeOnly "co.helmethair:scalatest-junit-runner:0.1.9"
+}
+
+test {
+  useJUnitPlatform {
+    includeEngines "scalatest"
+
+    testLogging {
+      events("passed", "skipped", "failed")
+    }
+  }
 }
 
 shadowJar {

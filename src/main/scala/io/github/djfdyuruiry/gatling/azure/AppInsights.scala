@@ -24,5 +24,12 @@ object AppInsights {
           recorder.flushAppInsightRequests()
           s
         })
+
+    def flushAppInsightsRecordings: ScenarioBuilder =
+      scenario
+        .exec(s => {
+          recorder.flushAppInsightRequests()
+          s
+        })
   }
 }

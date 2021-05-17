@@ -33,7 +33,7 @@ class AppInsightsResponseRecorder {
     val request = response.request
     val requestUrl = request.getUri.toUrlWithoutQuery
     val requestMethod = s"${request.getMethod}"
-    val requestName = s"${requestMethod} ${requestUrl}"
+    val requestName = config.requestNameProvider.apply(session, response)
     val durationInMs = response.endTimestamp - response.startTimestamp
 
     val insightsRequest = new RequestTelemetry
@@ -52,11 +52,12 @@ class AppInsightsResponseRecorder {
     }
 
     val customProperties = Map[String, String](
+      "GatlingScenario" -> session.scenario,
       "HttpUrl" -> requestUrl,
       "HttpQueryString" -> queryString,
       "HttpMethod" -> requestMethod,
       "StartTime" -> s"${response.startTimestamp}",
-      "EndTime " -> s"${response.endTimestamp}",
+      "EndTime" -> s"${response.endTimestamp}",
     ) ++ config.sessionFieldMappings.map(kvp =>
       (kvp._1, getSessionValOrDefault(session, kvp._2))
     ) ++ config.customMappings.map(kvp =>
