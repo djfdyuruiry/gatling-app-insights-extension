@@ -86,7 +86,7 @@ class AppInsightsResponseRecorderSuite extends AnyFunSuite with BeforeAndAfter w
       isHttp2 = false
     )
 
-    recorderConfig = RecorderConfig(testInstrumentationKey)
+    recorderConfig = RecorderConfig(testInstrumentationKey, requestBatchSize = 10)
     telemetryClient = mock[TelemetryClient]
 
     buildRecorder(recorderConfig, telemetryClient)
@@ -242,6 +242,30 @@ class AppInsightsResponseRecorderSuite extends AnyFunSuite with BeforeAndAfter w
     )
 
     assert(telemetryPassed !== null)
+  }
+
+  test("when recordResponse nine times and config has a batch size of ten then telemetry client is not flushed") {
+    (1 to 9).foreach(_ =>
+      recorder.recordResponse(session, response)
+    )
+
+    verify(telemetryClient, never).flush()
+  }
+
+  test("when recordResponse ten times and config has a batch size of ten then telemetry client is flushed") {
+    (1 to 10).foreach(_ =>
+      recorder.recordResponse(session, response)
+    )
+
+    verify(telemetryClient, times(1)).flush()
+  }
+
+  test("when recordResponse thirty times and config has a batch size of ten then telemetry client is flushed thrice") {
+    (1 to 30).foreach(_ =>
+      recorder.recordResponse(session, response)
+    )
+
+    verify(telemetryClient, times(3)).flush()
   }
 
   test("when recordResponse called then response is returned") {

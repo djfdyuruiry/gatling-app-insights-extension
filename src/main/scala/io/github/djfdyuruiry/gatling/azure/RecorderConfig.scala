@@ -8,6 +8,7 @@ import com.microsoft.applicationinsights.telemetry.RequestTelemetry
 
 case class RecorderConfig(instrumentationKey: String,
                           defaultValue: String = "unknown",
+                          requestBatchSize: Int = 100,
                           requestNameProvider: (Session, Response) => String =
                             (_, r) => s"${r.request.getMethod} ${r.request.getUri.toUrlWithoutQuery}",
                           sessionFieldMappings: Map[String, String] = Map(),

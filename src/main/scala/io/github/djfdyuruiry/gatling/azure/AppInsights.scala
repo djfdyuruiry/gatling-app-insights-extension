@@ -38,6 +38,9 @@ object AppInsights {
     recorderInstance.config = recorderConfig
   }
 
+  def flushAppInsightsRecordings(): Unit =
+    recorderInstance.flushAppInsightRequests()
+
   def reset(): Unit = {
     appInsightsEnabled = true
     recorderInstance = null
@@ -77,7 +80,7 @@ object AppInsights {
         .exec(s => {
           getRecorder.flushAppInsightRequests()
           s
-        });
+        })
     }
 
     def withAppInsightsRecording(builder: ChainBuilder): ScenarioBuilder = {

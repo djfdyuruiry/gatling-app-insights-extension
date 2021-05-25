@@ -1,6 +1,7 @@
 package io.github.djfdyuruiry.gatling.azure
 
 import java.util.Date
+import java.util.concurrent.atomic.AtomicInteger
 
 import scala.jdk.CollectionConverters.MapHasAsJava
 
@@ -31,9 +32,18 @@ class AppInsightsResponseRecorder {
 
     telemetryClientFactory.apply(telemetryConfig)
   }
+  private val requestCounter: AtomicInteger = new AtomicInteger(1)
 
   var telemetryClientFactory: TelemetryConfiguration => TelemetryClient = c => new TelemetryClient(c)
   var config: RecorderConfig = _
+
+  private def flushIfRequired(): Unit = {
+    val requestsSent = requestCounter.getAndIncrement()
+
+    if (requestsSent % config.requestBatchSize == 0) {
+      flushAppInsightRequests()
+    }
+  }
 
   private def runRequestHooks(session: Session, response: Response, insightsRequest: RequestTelemetry): Unit =
     config.requestHooks.foreach(_.apply(telemetryClient, session, response, insightsRequest))
@@ -50,11 +60,17 @@ class AppInsightsResponseRecorder {
                                     response: Response,
                                     requestUrl: String,
                                     requestMethod: String,
-                                    queryString: String): Map[String, String] =
+                                    queryString: String): Map[String, String] = {
+    var queryStringToRecord = ""
+
+    if (queryString != null) {
+      queryStringToRecord = queryString
+    }
+
     Map[String, String](
       "GatlingScenario" -> session.scenario,
       "HttpUrl" -> requestUrl,
-      "HttpQueryString" -> queryString,
+      "HttpQueryString" -> queryStringToRecord,
       "HttpMethod" -> requestMethod,
       "StartTime" -> s"${response.startTimestamp}",
       "EndTime" -> s"${response.endTimestamp}",
@@ -63,6 +79,7 @@ class AppInsightsResponseRecorder {
     ) ++ config.customMappings.map(kvp =>
       (kvp._1, kvp._2.apply(session, response))
     )
+  }
 
   //noinspection ScalaDeprecation
   private def mapResponseAndTrackInAppInsights(session: Session, response: Response): Unit = {
@@ -83,19 +100,22 @@ class AppInsightsResponseRecorder {
     insightsRequest.setTimestamp(new Date(response.startTimestamp))
     insightsRequest.setDuration(new Duration(durationInMs))
 
-    var queryString = request.getUri.getQuery
-
-    if (queryString == null) {
-      queryString = ""
-    }
-
-    val customProperties = buildCustomProperties(session, response, requestUrl, requestMethod, queryString)
-
-    insightsRequest.getProperties.putAll(customProperties.asJava)
+    insightsRequest.getProperties
+      .putAll(
+        buildCustomProperties(
+          session,
+          response,
+          requestUrl,
+          requestMethod,
+          request.getUri.getQuery
+        ).asJava
+      )
 
     runRequestHooks(session, response, insightsRequest)
 
     appInsightsClient.trackRequest(insightsRequest)
+
+    flushIfRequired()
   }
 
   def recordResponse(session: Session, response: Response): Response = {
