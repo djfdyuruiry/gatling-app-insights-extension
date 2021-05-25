@@ -23,6 +23,7 @@ import io.netty.handler.codec.http.{HttpHeaders, HttpMethod, HttpResponseStatus}
 import com.microsoft.applicationinsights.telemetry.{Duration, RequestTelemetry}
 import com.microsoft.applicationinsights.{TelemetryClient, TelemetryConfiguration}
 
+//noinspection ScalaDeprecation
 class AppInsightsResponseRecorderSuite extends AnyFunSuite with BeforeAndAfter with MockitoSugar {
   private val testInstrumentationKey: String = "test-instrumentation-key"
 
@@ -91,7 +92,23 @@ class AppInsightsResponseRecorderSuite extends AnyFunSuite with BeforeAndAfter w
     buildRecorder(recorderConfig, telemetryClient)
   }
 
-  test("when telemetry client created then config contains correct instrumentation key") {
+  test("when recordResponse is called and config is null then exception is thrown") {
+    buildRecorder(null, telemetryClient)
+
+    assertThrows[AppInsightsRecorderConfigException] {
+      recorder.recordResponse(session, response)
+    }
+  }
+
+  test("when recordResponse is called and config has blank instrumentation key then exception is thrown") {
+    buildRecorder(RecorderConfig(""), telemetryClient)
+
+    assertThrows[AppInsightsRecorderConfigException] {
+      recorder.recordResponse(session, response)
+    }
+  }
+
+  test("when recordResponse is called then telemetry client is created with correct instrumentation key") {
     recorder.recordResponse(session, response)
 
     assert(telemetryConfigUsed.getInstrumentationKey === testInstrumentationKey)
@@ -122,7 +139,7 @@ class AppInsightsResponseRecorderSuite extends AnyFunSuite with BeforeAndAfter w
     }
   }
 
-  test(s"when config.defaultValue is set and recordResponse is called then returned response has correct default values") {
+  test("when config.defaultValue is set and recordResponse is called then returned response has correct default values") {
     recorderConfig = RecorderConfig(
       testInstrumentationKey,
       defaultValue = "special",
@@ -136,7 +153,7 @@ class AppInsightsResponseRecorderSuite extends AnyFunSuite with BeforeAndAfter w
     runRecordTest(_.getProperties.get("TestField"), "special")
   }
 
-  test(s"when config.requestNameProvider is set and recordResponse is called then returned response has correct name") {
+  test("when config.requestNameProvider is set and recordResponse is called then returned response has correct name") {
     recorderConfig = RecorderConfig(
       testInstrumentationKey,
       requestNameProvider = (_, _) => "some dummy name"
@@ -147,7 +164,7 @@ class AppInsightsResponseRecorderSuite extends AnyFunSuite with BeforeAndAfter w
     runRecordTest(_.getName, "some dummy name")
   }
 
-  test(s"when config.sessionFieldMappings is set and recordResponse is called then returned response has session fields") {
+  test("when config.sessionFieldMappings is set and recordResponse is called then returned response has session fields") {
     recorderConfig = RecorderConfig(
       testInstrumentationKey,
       sessionFieldMappings = Map(
@@ -162,7 +179,7 @@ class AppInsightsResponseRecorderSuite extends AnyFunSuite with BeforeAndAfter w
     runRecordTest(_.getProperties.get("CountryCodeOut"), "en-gb", times(2))
   }
 
-  test(s"when config.customMappings is set and recordResponse is called then returned response has custom fields") {
+  test("when config.customMappings is set and recordResponse is called then returned response has custom fields") {
     recorderConfig = RecorderConfig(
       testInstrumentationKey,
       customMappings = Map(
@@ -175,6 +192,56 @@ class AppInsightsResponseRecorderSuite extends AnyFunSuite with BeforeAndAfter w
 
     runRecordTest(_.getProperties.get("FormattedScenario"), "--> scenario name <--", times(1))
     runRecordTest(_.getProperties.get("LogCode"), "responseCode=200", times(2))
+  }
+
+  test("when config.requestHooks is set and recordResponse is called then hook is called") {
+    var hookWasCalled = false
+
+    runHookTest(
+      (_, _, _, _) => hookWasCalled = true
+    )
+
+    assert(hookWasCalled === true)
+  }
+
+  test("when config.requestHooks is set and recordResponse is called then client is passed to hook") {
+    var clientPassed: TelemetryClient = null
+
+    runHookTest(
+      (c, _, _, _) => clientPassed = c
+    )
+
+    assert(clientPassed === telemetryClient)
+  }
+
+  test("when config.requestHooks is set and recordResponse is called then session is passed to hook") {
+    var sessionPassed: Session = null
+
+    runHookTest(
+        (_, s, _, _) => sessionPassed = s
+    )
+
+    assert(sessionPassed === session)
+  }
+
+  test("when config.requestHooks is set and recordResponse is called then response is passed to hook") {
+    var responsePassed: Response = null
+
+    runHookTest(
+      (_, _, r, _) => responsePassed = r
+    )
+
+    assert(responsePassed === response)
+  }
+
+  test("when config.requestHooks is set and recordResponse is called then telemetry is passed to hook") {
+    var telemetryPassed: RequestTelemetry = null
+
+    runHookTest(
+      (_, _, _, r) => telemetryPassed = r
+    )
+
+    assert(telemetryPassed !== null)
   }
 
   test("when recordResponse called then response is returned") {
@@ -213,5 +280,16 @@ class AppInsightsResponseRecorderSuite extends AnyFunSuite with BeforeAndAfter w
     val requestTelemetryFieldValue = fieldExtractor.apply(requestCaptor.value)
 
     assert(requestTelemetryFieldValue === expectedValue)
+  }
+
+  def runHookTest(hook: (TelemetryClient, Session, Response, RequestTelemetry) => Unit): Unit = {
+    recorderConfig = RecorderConfig(
+      testInstrumentationKey,
+      requestHooks = Seq(hook)
+    )
+
+    buildRecorder()
+
+    recorder.recordResponse(session, response)
   }
 }
