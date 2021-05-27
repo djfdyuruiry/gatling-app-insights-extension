@@ -1,7 +1,6 @@
 package io.github.djfdyuruiry.gatling.azure
 
 import java.util.Date
-import java.util.concurrent.atomic.AtomicInteger
 
 import scala.jdk.CollectionConverters.MapHasAsJava
 
@@ -26,24 +25,15 @@ class AppInsightsResponseRecorder {
       )
     }
 
-    val telemetryConfig = TelemetryConfiguration.createDefault();
+    val telemetryConfig = TelemetryConfiguration.createDefault;
 
     telemetryConfig.setInstrumentationKey(config.instrumentationKey)
 
     telemetryClientFactory.apply(telemetryConfig)
   }
-  private val requestCounter: AtomicInteger = new AtomicInteger(1)
 
   var telemetryClientFactory: TelemetryConfiguration => TelemetryClient = c => new TelemetryClient(c)
   var config: RecorderConfig = _
-
-  private def flushIfRequired(): Unit = {
-    val requestsSent = requestCounter.getAndIncrement()
-
-    if (requestsSent % config.requestBatchSize == 0) {
-      flushAppInsightRequests()
-    }
-  }
 
   private def runRequestHooks(session: Session, response: Response, insightsRequest: RequestTelemetry): Unit =
     config.requestHooks.foreach(_.apply(telemetryClient, session, response, insightsRequest))
@@ -90,15 +80,23 @@ class AppInsightsResponseRecorder {
     val requestMethod = s"${request.getMethod}"
     val requestName = config.requestNameProvider.apply(session, response)
     val durationInMs = response.endTimestamp - response.startTimestamp
+    val statusCode = response.status.code();
 
-    val insightsRequest = new RequestTelemetry
+    val insightsRequest = new RequestTelemetry(
+      requestName,
+      new Date(response.startTimestamp),
+      new Duration(durationInMs),
+      s"${statusCode}",
+      statusCode < 400
+    );
 
-    insightsRequest.setName(requestName)
+    insightsRequest.getContext
+      .getOperation
+      .setName(requestName)
+
     insightsRequest.setUrl(requestUrl)
     insightsRequest.setHttpMethod(requestMethod)
-    insightsRequest.setResponseCode(s"${response.status.code()}")
-    insightsRequest.setTimestamp(new Date(response.startTimestamp))
-    insightsRequest.setDuration(new Duration(durationInMs))
+    insightsRequest.setResponseCode(s"${statusCode}")
 
     insightsRequest.getProperties
       .putAll(
@@ -114,8 +112,6 @@ class AppInsightsResponseRecorder {
     runRequestHooks(session, response, insightsRequest)
 
     appInsightsClient.trackRequest(insightsRequest)
-
-    flushIfRequired()
   }
 
   def recordResponse(session: Session, response: Response): Response = {

@@ -10,7 +10,7 @@ repositories {
 }
 
 group = "io.github.djfdyuruiry.gatling.azure"
-version = "0.2.1"
+version = "0.2.2"
 description = "gatling-app-insights-extension"
 
 publishing {
