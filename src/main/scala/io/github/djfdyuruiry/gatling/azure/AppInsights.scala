@@ -4,6 +4,7 @@ import java.lang.Runtime.getRuntime
 
 import scala.language.implicitConversions
 
+import io.gatling.core.Predef._
 import io.gatling.http.request.builder.HttpRequestBuilder
 
 object AppInsights {
