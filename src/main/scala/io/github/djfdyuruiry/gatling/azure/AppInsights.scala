@@ -19,7 +19,7 @@ object AppInsights {
     }
 
     getRuntime.addShutdownHook(
-      new Thread(() => recorderInstance.flushAppInsightRequests())
+      new Thread(() => reset())
     )
 
     recorderInstance
@@ -44,6 +44,11 @@ object AppInsights {
 
   def reset(): Unit = {
     appInsightsEnabled = true
+
+    if (recorderInstance != null) {
+      recorderInstance.flushAppInsightRequests()
+    }
+
     recorderInstance = null
   }
 
