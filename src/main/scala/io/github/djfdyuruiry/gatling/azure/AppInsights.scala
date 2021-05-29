@@ -1,10 +1,9 @@
 package io.github.djfdyuruiry.gatling.azure
 
+import java.lang.Runtime.getRuntime
+
 import scala.language.implicitConversions
 
-import io.gatling.core.Predef._
-import io.gatling.core.action.builder.ActionBuilder
-import io.gatling.core.structure.{ChainBuilder, ScenarioBuilder}
 import io.gatling.http.request.builder.HttpRequestBuilder
 
 object AppInsights {
@@ -17,6 +16,10 @@ object AppInsights {
         "Please initialize app insights config by calling AppInsights.useAppInsightsConfig"
       )
     }
+
+    getRuntime.addShutdownHook(
+      new Thread(() => recorderInstance.flushAppInsightRequests())
+    )
 
     recorderInstance
   }
@@ -38,9 +41,6 @@ object AppInsights {
     recorderInstance.config = recorderConfig
   }
 
-  def flushAppInsightsRecordings(): Unit =
-    recorderInstance.flushAppInsightRequests()
-
   def reset(): Unit = {
     appInsightsEnabled = true
     recorderInstance = null
@@ -53,52 +53,6 @@ object AppInsights {
       }
 
       builder.transformResponse(getRecorder.recordResponse)
-    }
-  }
-
-  implicit class ChainExtensions(chain: ChainBuilder) {
-    def flushAppInsightsRecordings: ChainBuilder = {
-      if (!appInsightsEnabled) {
-        return chain
-      }
-
-      chain
-        .exec(s => {
-          getRecorder.flushAppInsightRequests()
-          s
-        })
-    }
-  }
-
-  implicit class ScenarioExtensions(scenario: ScenarioBuilder) {
-    def flushAppInsightsRecordings: ScenarioBuilder = {
-      if (!appInsightsEnabled) {
-        return scenario
-      }
-
-      scenario
-        .exec(s => {
-          getRecorder.flushAppInsightRequests()
-          s
-        })
-    }
-
-    def withAppInsightsRecording(builder: ChainBuilder): ScenarioBuilder = {
-      if (!appInsightsEnabled) {
-        return scenario
-      }
-
-      scenario.exec(builder)
-        .flushAppInsightsRecordings
-    }
-
-    def withAppInsightsRecording(builder: ActionBuilder): ScenarioBuilder = {
-      if (!appInsightsEnabled) {
-        return scenario
-      }
-
-      scenario.exec(builder)
-        .flushAppInsightsRecordings
     }
   }
 }
