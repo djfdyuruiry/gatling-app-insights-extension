@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <metadata>
   <groupId>io.github.djfdyuruiry.gatling.azure</groupId>
-  <artifactId>iproov</artifactId>
+  <artifactId>gatling-app-insights-extension</artifactId>
   <versioning>
     <latest>0.2.3</latest>
     <release>0.2.3</release>
