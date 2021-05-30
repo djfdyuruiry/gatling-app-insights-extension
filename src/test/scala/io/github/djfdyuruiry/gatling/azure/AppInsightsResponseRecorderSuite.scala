@@ -108,6 +108,22 @@ class AppInsightsResponseRecorderSuite extends AnyFunSuite with BeforeAndAfter w
     }
   }
 
+  test("when recordResponse is called and telemetryClientFactory is null then exception is thrown") {
+    recorder.telemetryClientFactory = null
+
+    assertThrows[AppInsightsRecorderConfigException] {
+      recorder.recordResponse(session, response)
+    }
+  }
+
+  test("when recordResponse is called and telemetryClientFactory returns null then exception is thrown") {
+    recorder.telemetryClientFactory = _ => null
+
+    assertThrows[AppInsightsRecorderConfigException] {
+      recorder.recordResponse(session, response)
+    }
+  }
+
   test("when recordResponse is called then telemetry client is created with correct instrumentation key") {
     recorder.recordResponse(session, response)
 
@@ -250,10 +266,18 @@ class AppInsightsResponseRecorderSuite extends AnyFunSuite with BeforeAndAfter w
     )
   }
 
-  test("when flushAppInsightRequests is called then telemetry client is called") {
+  test("when flushAppInsightRequests is called after recording telemetry then telemetry client is called") {
+    recorder.recordResponse(session, response)
+
     recorder.flushAppInsightRequests()
 
     verify(telemetryClient, times(1)).flush()
+  }
+
+  test("when flushAppInsightRequests is called before recording telemetry then telemetry client is not called") {
+    recorder.flushAppInsightRequests()
+
+    verify(telemetryClient, never).flush()
   }
 
   private def buildRecorder(recorderConfigToUse: RecorderConfig = recorderConfig,

@@ -7,12 +7,40 @@ import scala.jdk.CollectionConverters.MapHasAsJava
 import io.gatling.core.session.Session
 import io.gatling.http.response.Response
 
-import com.microsoft.applicationinsights.core.dependencies.apachecommons.lang3.StringUtils.isBlank
+import com.microsoft.applicationinsights.core.dependencies.apachecommons.lang3.StringUtils.{EMPTY, isBlank}
 import com.microsoft.applicationinsights.telemetry.{Duration, RequestTelemetry}
 import com.microsoft.applicationinsights.{TelemetryClient, TelemetryConfiguration}
 
 class AppInsightsResponseRecorder {
-  private lazy val telemetryClient: TelemetryClient = {
+  private val defaultConfig: RecorderConfig = RecorderConfig(EMPTY)
+  private var activeTelemetryClient: TelemetryClient = _
+
+  var telemetryClientFactory: TelemetryConfiguration => TelemetryClient = c => new TelemetryClient(c)
+  var config: RecorderConfig = defaultConfig
+
+  def buildActiveTelemetryClient(telemetryConfig: TelemetryConfiguration): TelemetryClient = {
+    if (telemetryClientFactory == null) {
+      throw new AppInsightsRecorderConfigException(
+        "Custom telemetryClientFactory was null"
+      )
+    }
+
+    activeTelemetryClient = telemetryClientFactory.apply(telemetryConfig)
+
+    if (activeTelemetryClient == null) {
+      throw new AppInsightsRecorderConfigException(
+        "Custom telemetryClientFactory returned null"
+      )
+    }
+
+    activeTelemetryClient
+  }
+
+  private def buildActiveTelemetryClientIfRequired: TelemetryClient = {
+    if (activeTelemetryClient != null) {
+      return activeTelemetryClient
+    }
+
     if (config == null) {
       throw new AppInsightsRecorderConfigException(
         "App Insights recorder config must be set before recording requests"
@@ -25,22 +53,31 @@ class AppInsightsResponseRecorder {
       )
     }
 
-    val telemetryConfig = TelemetryConfiguration.createDefault;
+    val telemetryConfig = TelemetryConfiguration.getActive;
 
     telemetryConfig.setInstrumentationKey(config.instrumentationKey)
 
-    telemetryClientFactory.apply(telemetryConfig)
+    buildActiveTelemetryClient(telemetryConfig)
   }
 
-  var telemetryClientFactory: TelemetryConfiguration => TelemetryClient = c => new TelemetryClient(c)
-  var config: RecorderConfig = _
+  private def getConfigValueOrDefault[T](valueExtractor: (RecorderConfig) => T): T = {
+    var value = valueExtractor.apply(config)
+
+    if (value == null) {
+      value = valueExtractor.apply(defaultConfig)
+    }
+
+    value
+  }
 
   private def runRequestHooks(session: Session, response: Response, insightsRequest: RequestTelemetry): Unit =
-    config.requestHooks.foreach(_.apply(telemetryClient, session, response, insightsRequest))
+    getConfigValueOrDefault(_.requestHooks).foreach(
+      _.apply(activeTelemetryClient, session, response, insightsRequest)
+    )
 
   private def getSessionValOrDefault(session: Session, key: String): String = {
     if (!session.contains(key)) {
-      return config.defaultValue
+      return getConfigValueOrDefault(_.defaultValue)
     }
 
     session(key).as[String]
@@ -64,21 +101,19 @@ class AppInsightsResponseRecorder {
       "HttpMethod" -> requestMethod,
       "StartTime" -> s"${response.startTimestamp}",
       "EndTime" -> s"${response.endTimestamp}",
-    ) ++ config.sessionFieldMappings.map(kvp =>
+    ) ++ getConfigValueOrDefault(_.sessionFieldMappings).map(kvp =>
       (kvp._1, getSessionValOrDefault(session, kvp._2))
-    ) ++ config.customMappings.map(kvp =>
+    ) ++ getConfigValueOrDefault(_.customMappings).map(kvp =>
       (kvp._1, kvp._2.apply(session, response))
     )
   }
 
   //noinspection ScalaDeprecation
   private def mapResponseAndTrackInAppInsights(session: Session, response: Response): Unit = {
-    val appInsightsClient = telemetryClient
-
     val request = response.request
     val requestUrl = request.getUri.toUrlWithoutQuery
     val requestMethod = s"${request.getMethod}"
-    val requestName = config.requestNameProvider.apply(session, response)
+    val requestName = getConfigValueOrDefault(_.requestNameProvider).apply(session, response)
     val durationInMs = response.endTimestamp - response.startTimestamp
     val statusCode = response.status.code();
 
@@ -111,20 +146,24 @@ class AppInsightsResponseRecorder {
 
     runRequestHooks(session, response, insightsRequest)
 
-    appInsightsClient.trackRequest(insightsRequest)
+    activeTelemetryClient.trackRequest(insightsRequest)
   }
 
   def recordResponse(session: Session, response: Response): Response = {
     try {
+      buildActiveTelemetryClientIfRequired
+
       mapResponseAndTrackInAppInsights(session, response)
     } catch {
       case e: AppInsightsRecorderConfigException => throw e
-      case e: Throwable => e.printStackTrace()
+      case e: Throwable => getConfigValueOrDefault(_.exceptionHandler).apply(e)
     }
 
     response
   }
 
   def flushAppInsightRequests(): Unit =
-    telemetryClient.flush()
+    if (activeTelemetryClient != null) {
+      activeTelemetryClient.flush()
+    }
 }

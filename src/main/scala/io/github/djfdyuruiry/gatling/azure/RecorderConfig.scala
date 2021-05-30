@@ -12,4 +12,5 @@ case class RecorderConfig(instrumentationKey: String,
                             (_, r) => s"${r.request.getMethod} ${r.request.getUri.toUrlWithoutQuery}",
                           sessionFieldMappings: Map[String, String] = Map(),
                           customMappings: Map[String, (Session, Response) => String] = Map(),
-                          requestHooks: Seq[(TelemetryClient, Session, Response, RequestTelemetry) => Unit] = Seq())
+                          requestHooks: Seq[(TelemetryClient, Session, Response, RequestTelemetry) => Unit] = Seq(),
+                          exceptionHandler: (Throwable) => Unit = _.printStackTrace())
