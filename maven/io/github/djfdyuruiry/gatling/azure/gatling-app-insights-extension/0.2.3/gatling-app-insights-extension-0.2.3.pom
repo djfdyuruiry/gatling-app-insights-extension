@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd" xmlns="http://maven.apache.org/POM/4.0.0"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>io.github.djfdyuruiry.gatling.azure</groupId>
+  <artifactId>gatling-app-insights-extension</artifactId>
+  <version>0.2.3</version>
+  <packaging>pom</packaging>
+  <name>Azure AppInsights Gatling Extension</name>
+  <description>Plugin for the Gatling test framework that reports test request telemetry to Azure AppInsights</description>
+  <url>https://github.com/djfdyuruiry/gatling-app-insights-extension</url>
+  <licenses>
+    <license>
+      <name>MIT License</name>
+      <url>https://raw.githubusercontent.com/djfdyuruiry/gatling-app-insights-extension/master/LICENSE</url>
+    </license>
+  </licenses>
+  <developers>
+    <developer>
+      <id>djfdyuruiry</id>
+      <name>Matthew Snoddy</name>
+      <email>djfdyuruiry@noreply.github.com</email>
+    </developer>
+  </developers>
+</project>
