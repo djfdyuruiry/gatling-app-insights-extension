@@ -1,6 +1,6 @@
 # Gatling App Insights Extension
 
-This library provides extensions for the Gatling testing framework for recording requests telemetry to Azure App Insights.
+This library provides extensions for the Gatling testing framework for recording request telemetry to Azure App Insights.
 
 - Record Gatling HTTP requests with scenario/user metadata
 - Send headers, cookies, query parameters and more
