@@ -18,10 +18,6 @@ object AppInsights {
       )
     }
 
-    getRuntime.addShutdownHook(
-      new Thread(() => reset())
-    )
-
     recorderInstance
   }
 
@@ -51,6 +47,10 @@ object AppInsights {
 
     recorderInstance = null
   }
+
+  getRuntime.addShutdownHook(
+    new Thread(() => reset())
+  )
 
   implicit class RequestBuilderExtensions(builder: HttpRequestBuilder) {
     def recordToAppInsights: HttpRequestBuilder = {
